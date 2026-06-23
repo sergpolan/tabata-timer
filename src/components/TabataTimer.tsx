@@ -1,0 +1,372 @@
+"use client";
+
+import { useCallback, useEffect, useReducer, useRef } from "react";
+
+type Phase = "idle" | "work" | "rest" | "complete";
+
+type Config = {
+  workSeconds: number;
+  restSeconds: number;
+  sets: number;
+};
+
+type TimerState = {
+  phase: Phase;
+  currentSet: number;
+  timeLeft: number;
+  isRunning: boolean;
+};
+
+type TimerAction =
+  | { type: "start" }
+  | { type: "pause" }
+  | { type: "resume" }
+  | { type: "reset" }
+  | { type: "tick" }
+  | { type: "sync_config" };
+
+const DEFAULT_CONFIG: Config = {
+  workSeconds: 20,
+  restSeconds: 10,
+  sets: 8,
+};
+
+function createInitialState(config: Config): TimerState {
+  return {
+    phase: "idle",
+    currentSet: 1,
+    timeLeft: config.workSeconds,
+    isRunning: false,
+  };
+}
+
+function timerReducer(
+  state: TimerState,
+  action: TimerAction,
+  config: Config,
+): TimerState {
+  switch (action.type) {
+    case "start":
+      return {
+        phase: "work",
+        currentSet: 1,
+        timeLeft: config.workSeconds,
+        isRunning: true,
+      };
+    case "pause":
+      return { ...state, isRunning: false };
+    case "resume":
+      return state.phase === "complete"
+        ? state
+        : { ...state, isRunning: true };
+    case "reset":
+      return createInitialState(config);
+    case "sync_config":
+      return state.phase === "idle"
+        ? { ...state, timeLeft: config.workSeconds }
+        : state;
+    case "tick": {
+      if (
+        !state.isRunning ||
+        state.phase === "idle" ||
+        state.phase === "complete"
+      ) {
+        return state;
+      }
+
+      if (state.timeLeft > 1) {
+        return { ...state, timeLeft: state.timeLeft - 1 };
+      }
+
+      if (state.phase === "work") {
+        if (state.currentSet >= config.sets) {
+          return {
+            ...state,
+            phase: "complete",
+            isRunning: false,
+            timeLeft: 0,
+          };
+        }
+        return {
+          ...state,
+          phase: "rest",
+          timeLeft: config.restSeconds,
+        };
+      }
+
+      return {
+        ...state,
+        phase: "work",
+        currentSet: state.currentSet + 1,
+        timeLeft: config.workSeconds,
+      };
+    }
+    default:
+      return state;
+  }
+}
+
+function formatTime(seconds: number) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+type StepperProps = {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  min: number;
+  max: number;
+  step?: number;
+  suffix?: string;
+  disabled?: boolean;
+};
+
+function Stepper({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  step = 1,
+  suffix,
+  disabled,
+}: StepperProps) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-medium text-stone-400">{label}</span>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          aria-label={`Decrease ${label}`}
+          disabled={disabled || value <= min}
+          onClick={() => onChange(clamp(value - step, min, max))}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-stone-700 bg-stone-900 text-lg text-stone-200 transition-colors hover:border-stone-500 hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          −
+        </button>
+        <div className="flex min-w-[5.5rem] flex-1 items-baseline justify-center gap-1">
+          <span className="font-mono text-2xl font-semibold tabular-nums text-stone-50">
+            {value}
+          </span>
+          {suffix && (
+            <span className="text-sm text-stone-500">{suffix}</span>
+          )}
+        </div>
+        <button
+          type="button"
+          aria-label={`Increase ${label}`}
+          disabled={disabled || value >= max}
+          onClick={() => onChange(clamp(value + step, min, max))}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-stone-700 bg-stone-900 text-lg text-stone-200 transition-colors hover:border-stone-500 hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const PHASE_LABELS: Record<Phase, string> = {
+  idle: "Ready",
+  work: "Work",
+  rest: "Rest",
+  complete: "Done",
+};
+
+export default function TabataTimer() {
+  const [config, setConfig] = useReducer(
+    (prev: Config, next: Partial<Config>) => ({ ...prev, ...next }),
+    DEFAULT_CONFIG,
+  );
+  const [timer, dispatch] = useReducer(
+    (state: TimerState, action: TimerAction) =>
+      timerReducer(state, action, config),
+    DEFAULT_CONFIG,
+    createInitialState,
+  );
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const isLocked = timer.phase !== "idle" && timer.phase !== "complete";
+
+  const clearTimer = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    dispatch({ type: "sync_config" });
+  }, [config.workSeconds]);
+
+  useEffect(() => {
+    if (!timer.isRunning) {
+      clearTimer();
+      return;
+    }
+
+    intervalRef.current = setInterval(() => {
+      dispatch({ type: "tick" });
+    }, 1000);
+
+    return clearTimer;
+  }, [timer.isRunning, clearTimer]);
+
+  useEffect(() => () => clearTimer(), [clearTimer]);
+
+  const phaseColor =
+    timer.phase === "work"
+      ? "text-amber-400"
+      : timer.phase === "rest"
+        ? "text-sky-400"
+        : timer.phase === "complete"
+          ? "text-emerald-400"
+          : "text-stone-400";
+
+  const ringColor =
+    timer.phase === "work"
+      ? "border-amber-400/30 shadow-[0_0_60px_-12px_rgba(251,191,36,0.35)]"
+      : timer.phase === "rest"
+        ? "border-sky-400/30 shadow-[0_0_60px_-12px_rgba(56,189,248,0.35)]"
+        : timer.phase === "complete"
+          ? "border-emerald-400/30 shadow-[0_0_60px_-12px_rgba(52,211,153,0.35)]"
+          : "border-stone-700";
+
+  const totalSeconds =
+    config.sets * config.workSeconds +
+    (config.sets - 1) * config.restSeconds;
+
+  return (
+    <div className="mx-auto flex w-full max-w-md flex-col gap-10 px-6 py-12">
+      <header className="text-center">
+        <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
+          Tabata Timer
+        </h1>
+        <p className="mt-1 text-sm text-stone-500">
+          {config.sets} sets · {formatTime(totalSeconds)} total
+        </p>
+      </header>
+
+      <section
+        aria-live="polite"
+        aria-atomic="true"
+        className={`flex flex-col items-center rounded-3xl border bg-stone-900/60 px-8 py-10 transition-all duration-500 ${ringColor}`}
+      >
+        <span
+          className={`mb-4 text-sm font-semibold uppercase tracking-[0.2em] ${phaseColor}`}
+        >
+          {PHASE_LABELS[timer.phase]}
+        </span>
+
+        <div className="font-mono text-7xl font-bold tabular-nums tracking-tight text-stone-50 sm:text-8xl">
+          {formatTime(timer.timeLeft)}
+        </div>
+
+        {timer.phase !== "idle" && timer.phase !== "complete" && (
+          <p className="mt-4 text-sm text-stone-500">
+            Set {timer.currentSet} of {config.sets}
+          </p>
+        )}
+
+        {timer.phase !== "idle" && (
+          <div className="mt-6 flex gap-1.5" aria-hidden="true">
+            {Array.from({ length: config.sets }, (_, i) => {
+              const setNumber = i + 1;
+              const isDone =
+                setNumber < timer.currentSet ||
+                (timer.phase === "complete" && setNumber <= config.sets);
+              const isActive =
+                !isDone &&
+                setNumber === timer.currentSet &&
+                (timer.phase === "work" || timer.phase === "rest");
+
+              return (
+                <span
+                  key={setNumber}
+                  className={`h-2 w-2 rounded-full transition-colors ${
+                    isDone
+                      ? "bg-stone-500"
+                      : isActive
+                        ? timer.phase === "work"
+                          ? "bg-amber-400"
+                          : "bg-sky-400"
+                        : "bg-stone-700"
+                  }`}
+                />
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        <Stepper
+          label="Exercise"
+          value={config.workSeconds}
+          onChange={(workSeconds) => setConfig({ workSeconds })}
+          min={5}
+          max={300}
+          step={5}
+          suffix="sec"
+          disabled={isLocked}
+        />
+        <Stepper
+          label="Rest"
+          value={config.restSeconds}
+          onChange={(restSeconds) => setConfig({ restSeconds })}
+          min={0}
+          max={120}
+          step={5}
+          suffix="sec"
+          disabled={isLocked}
+        />
+        <Stepper
+          label="Sets"
+          value={config.sets}
+          onChange={(sets) => setConfig({ sets })}
+          min={1}
+          max={50}
+          disabled={isLocked}
+        />
+      </section>
+
+      <div className="flex flex-col gap-3 sm:flex-row">
+        {timer.phase === "idle" || timer.phase === "complete" ? (
+          <button
+            type="button"
+            onClick={() => dispatch({ type: "start" })}
+            className="flex h-14 flex-1 items-center justify-center rounded-2xl bg-amber-400 text-base font-semibold text-stone-950 transition-colors hover:bg-amber-300"
+          >
+            {timer.phase === "complete" ? "Start again" : "Start"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() =>
+              dispatch({ type: timer.isRunning ? "pause" : "resume" })
+            }
+            className="flex h-14 flex-1 items-center justify-center rounded-2xl bg-stone-100 text-base font-semibold text-stone-950 transition-colors hover:bg-white"
+          >
+            {timer.isRunning ? "Pause" : "Resume"}
+          </button>
+        )}
+
+        {timer.phase !== "idle" && (
+          <button
+            type="button"
+            onClick={() => dispatch({ type: "reset" })}
+            className="flex h-14 flex-1 items-center justify-center rounded-2xl border border-stone-700 text-base font-semibold text-stone-300 transition-colors hover:border-stone-500 hover:bg-stone-900"
+          >
+            Reset
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
