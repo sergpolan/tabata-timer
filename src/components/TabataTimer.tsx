@@ -1,16 +1,18 @@
 "use client";
 
 import { playCountdownTick, playPhaseSound, unlockSounds } from "@/lib/sounds";
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import {
+  DEFAULT_TABATA_CONFIG,
+  getTabataConfigPath,
+  isDefaultTabataConfig,
+  type TabataConfig,
+} from "@/lib/tabata-config-url";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 type Phase = "idle" | "prepare" | "work" | "rest" | "complete";
 
-type Config = {
-  prepareSeconds: number;
-  workSeconds: number;
-  restSeconds: number;
-  sets: number;
-};
+type Config = TabataConfig;
 
 type TimerState = {
   phase: Phase;
@@ -27,12 +29,11 @@ type TimerAction =
   | { type: "tick" }
   | { type: "sync_config" };
 
-const DEFAULT_CONFIG: Config = {
-  prepareSeconds: 10,
-  workSeconds: 20,
-  restSeconds: 10,
-  sets: 8,
-};
+const DEFAULT_CONFIG = DEFAULT_TABATA_CONFIG;
+
+function mergeConfig(initialConfig?: Partial<Config>): Config {
+  return { ...DEFAULT_CONFIG, ...initialConfig };
+}
 
 function createInitialState(config: Config): TimerState {
   return {
@@ -201,15 +202,22 @@ const PHASE_LABELS: Record<Phase, string> = {
   complete: "Done",
 };
 
-export default function TabataTimer() {
+export default function TabataTimer({
+  initialConfig,
+}: {
+  initialConfig?: Partial<Config>;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const [config, setConfig] = useReducer(
     (prev: Config, next: Partial<Config>) => ({ ...prev, ...next }),
-    DEFAULT_CONFIG,
+    mergeConfig(initialConfig),
   );
   const [timer, dispatch] = useReducer(
     (state: TimerState, action: TimerAction) =>
       timerReducer(state, action, config),
-    DEFAULT_CONFIG,
+    mergeConfig(initialConfig),
     createInitialState,
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -239,6 +247,33 @@ export default function TabataTimer() {
   useEffect(() => {
     dispatch({ type: "sync_config" });
   }, [config.workSeconds]);
+
+  useEffect(() => {
+    if (isLocked) {
+      return;
+    }
+
+    const targetPath = getTabataConfigPath(config);
+    const onHomeWithDefaults =
+      pathname === "/" && isDefaultTabataConfig(config);
+
+    if (!onHomeWithDefaults && pathname !== targetPath) {
+      router.replace(targetPath, { scroll: false });
+    }
+  }, [config, isLocked, pathname, router]);
+
+  const handleCopyLink = useCallback(async () => {
+    const path = getTabataConfigPath(config);
+    const url = `${window.location.origin}${path}`;
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 2000);
+    } catch {
+      setCopyState("idle");
+    }
+  }, [config]);
 
   useEffect(() => {
     if (!timer.isRunning) {
@@ -319,6 +354,15 @@ export default function TabataTimer() {
         <p className="mt-1 text-sm text-stone-500">
           {config.sets} sets · {formatTime(totalSeconds)} total
         </p>
+        {!isLocked && (
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="mt-3 text-sm font-medium text-stone-400 transition-colors hover:text-stone-200"
+          >
+            {copyState === "copied" ? "Link copied" : "Copy workout link"}
+          </button>
+        )}
       </header>
 
       <section
