@@ -138,8 +138,10 @@ function Stepper({
   disabled,
 }: StepperProps) {
   return (
-    <div className="flex flex-col gap-2">
-      <span className="text-sm font-medium text-stone-400">{label}</span>
+    <div className="flex items-center justify-between gap-4">
+      <span className="w-20 shrink-0 text-sm font-medium text-stone-400">
+        {label}
+      </span>
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -150,7 +152,7 @@ function Stepper({
         >
           −
         </button>
-        <div className="flex min-w-[5.5rem] flex-1 items-baseline justify-center gap-1">
+        <div className="flex w-24 items-baseline justify-center gap-1">
           <span className="font-mono text-2xl font-semibold tabular-nums text-stone-50">
             {value}
           </span>
@@ -305,7 +307,7 @@ export default function TabataTimer() {
         )}
       </section>
 
-      <section className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+      <section className="flex flex-col gap-5">
         <Stepper
           label="Exercise"
           value={config.workSeconds}
