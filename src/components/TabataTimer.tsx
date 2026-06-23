@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
 
-type Phase = "idle" | "work" | "rest" | "complete";
+type Phase = "idle" | "prepare" | "work" | "rest" | "complete";
 
 type Config = {
+  prepareSeconds: number;
   workSeconds: number;
   restSeconds: number;
   sets: number;
@@ -26,6 +27,7 @@ type TimerAction =
   | { type: "sync_config" };
 
 const DEFAULT_CONFIG: Config = {
+  prepareSeconds: 10,
   workSeconds: 20,
   restSeconds: 10,
   sets: 8,
@@ -47,10 +49,18 @@ function timerReducer(
 ): TimerState {
   switch (action.type) {
     case "start":
+      if (config.prepareSeconds <= 0) {
+        return {
+          phase: "work",
+          currentSet: 1,
+          timeLeft: config.workSeconds,
+          isRunning: true,
+        };
+      }
       return {
-        phase: "work",
+        phase: "prepare",
         currentSet: 1,
-        timeLeft: config.workSeconds,
+        timeLeft: config.prepareSeconds,
         isRunning: true,
       };
     case "pause":
@@ -76,6 +86,14 @@ function timerReducer(
 
       if (state.timeLeft > 1) {
         return { ...state, timeLeft: state.timeLeft - 1 };
+      }
+
+      if (state.phase === "prepare") {
+        return {
+          ...state,
+          phase: "work",
+          timeLeft: config.workSeconds,
+        };
       }
 
       if (state.phase === "work") {
@@ -176,6 +194,7 @@ function Stepper({
 
 const PHASE_LABELS: Record<Phase, string> = {
   idle: "Ready",
+  prepare: "Get Ready",
   work: "Work",
   rest: "Rest",
   complete: "Done",
@@ -223,7 +242,9 @@ export default function TabataTimer() {
   useEffect(() => () => clearTimer(), [clearTimer]);
 
   const phaseColor =
-    timer.phase === "work"
+    timer.phase === "prepare"
+      ? "text-violet-400"
+      : timer.phase === "work"
       ? "text-amber-400"
       : timer.phase === "rest"
         ? "text-sky-400"
@@ -232,7 +253,9 @@ export default function TabataTimer() {
           : "text-stone-400";
 
   const ringColor =
-    timer.phase === "work"
+    timer.phase === "prepare"
+      ? "border-violet-400/30 shadow-[0_0_60px_-12px_rgba(167,139,250,0.35)]"
+      : timer.phase === "work"
       ? "border-amber-400/30 shadow-[0_0_60px_-12px_rgba(251,191,36,0.35)]"
       : timer.phase === "rest"
         ? "border-sky-400/30 shadow-[0_0_60px_-12px_rgba(56,189,248,0.35)]"
@@ -270,13 +293,13 @@ export default function TabataTimer() {
           {formatTime(timer.timeLeft)}
         </div>
 
-        {timer.phase !== "idle" && timer.phase !== "complete" && (
+        {timer.phase === "work" || timer.phase === "rest" ? (
           <p className="mt-4 text-sm text-stone-500">
             Set {timer.currentSet} of {config.sets}
           </p>
-        )}
+        ) : null}
 
-        {timer.phase !== "idle" && (
+        {timer.phase === "work" || timer.phase === "rest" || timer.phase === "complete" ? (
           <div className="mt-6 flex gap-1.5" aria-hidden="true">
             {Array.from({ length: config.sets }, (_, i) => {
               const setNumber = i + 1;
@@ -304,10 +327,19 @@ export default function TabataTimer() {
               );
             })}
           </div>
-        )}
+        ) : null}
       </section>
 
       <section className="flex flex-col gap-5">
+        <Stepper
+          label="Prepare"
+          value={config.prepareSeconds}
+          onChange={(prepareSeconds) => setConfig({ prepareSeconds })}
+          min={0}
+          max={60}
+          suffix="sec"
+          disabled={isLocked}
+        />
         <Stepper
           label="Exercise"
           value={config.workSeconds}
