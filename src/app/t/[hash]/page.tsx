@@ -26,7 +26,7 @@ export async function generateMetadata({
 
   return {
     title: getWorkoutTitle(config),
-    description: `${config.workSeconds}s work, ${config.restSeconds}s rest, ${config.sets} sets`,
+    description: `${config.workSeconds}s work, ${config.restSeconds}s rest, ${config.exercises} exercises, ${config.sets} sets`,
   };
 }
 
@@ -40,7 +40,7 @@ export default async function TabataConfigPage({ params }: TabataConfigPageProps
 
   return (
     <main className="flex min-h-full flex-1 items-center justify-center">
-      <TabataTimer initialConfig={config} />
+      <TabataTimer initialConfig={config} readOnly />
     </main>
   );
 }

@@ -3,9 +3,12 @@
 import { playCountdownTick, playPhaseSound, unlockSounds } from "@/lib/sounds";
 import {
   DEFAULT_TABATA_CONFIG,
+  getExerciseName,
   getTabataConfigPath,
+  getTotalWorkoutSeconds,
   getWorkoutTitle,
   isDefaultTabataConfig,
+  resizeExerciseNames,
   type TabataConfig,
 } from "@/lib/tabata-config-url";
 import { usePathname, useRouter } from "next/navigation";
@@ -18,6 +21,7 @@ type Config = TabataConfig;
 type TimerState = {
   phase: Phase;
   currentSet: number;
+  currentExercise: number;
   timeLeft: number;
   isRunning: boolean;
 };
@@ -33,13 +37,21 @@ type TimerAction =
 const DEFAULT_CONFIG = DEFAULT_TABATA_CONFIG;
 
 function mergeConfig(initialConfig?: Partial<Config>): Config {
-  return { ...DEFAULT_CONFIG, ...initialConfig };
+  const merged = { ...DEFAULT_CONFIG, ...initialConfig };
+  return {
+    ...merged,
+    exerciseNames: resizeExerciseNames(
+      merged.exerciseNames ?? [],
+      merged.exercises,
+    ),
+  };
 }
 
 function createInitialState(config: Config): TimerState {
   return {
     phase: "idle",
     currentSet: 1,
+    currentExercise: 1,
     timeLeft: config.workSeconds,
     isRunning: false,
   };
@@ -56,6 +68,7 @@ function timerReducer(
         return {
           phase: "work",
           currentSet: 1,
+          currentExercise: 1,
           timeLeft: config.workSeconds,
           isRunning: true,
         };
@@ -63,6 +76,7 @@ function timerReducer(
       return {
         phase: "prepare",
         currentSet: 1,
+        currentExercise: 1,
         timeLeft: config.prepareSeconds,
         isRunning: true,
       };
@@ -100,7 +114,10 @@ function timerReducer(
       }
 
       if (state.phase === "work") {
-        if (state.currentSet >= config.sets) {
+        const isLastExercise = state.currentExercise >= config.exercises;
+        const isLastSet = state.currentSet >= config.sets;
+
+        if (isLastExercise && isLastSet) {
           return {
             ...state,
             phase: "complete",
@@ -108,6 +125,7 @@ function timerReducer(
             timeLeft: 0,
           };
         }
+
         return {
           ...state,
           phase: "rest",
@@ -115,10 +133,20 @@ function timerReducer(
         };
       }
 
+      if (state.currentExercise >= config.exercises) {
+        return {
+          ...state,
+          phase: "work",
+          currentSet: state.currentSet + 1,
+          currentExercise: 1,
+          timeLeft: config.workSeconds,
+        };
+      }
+
       return {
         ...state,
         phase: "work",
-        currentSet: state.currentSet + 1,
+        currentExercise: state.currentExercise + 1,
         timeLeft: config.workSeconds,
       };
     }
@@ -205,14 +233,26 @@ const PHASE_LABELS: Record<Phase, string> = {
 
 export default function TabataTimer({
   initialConfig,
+  readOnly = false,
 }: {
   initialConfig?: Partial<Config>;
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const [config, setConfig] = useReducer(
-    (prev: Config, next: Partial<Config>) => ({ ...prev, ...next }),
+    (prev: Config, next: Partial<Config>) => {
+      const exercises = next.exercises ?? prev.exercises;
+      const exerciseNames =
+        next.exerciseNames !== undefined
+          ? resizeExerciseNames(next.exerciseNames, exercises)
+          : next.exercises !== undefined
+            ? resizeExerciseNames(prev.exerciseNames, exercises)
+            : prev.exerciseNames;
+
+      return { ...prev, ...next, exercises, exerciseNames };
+    },
     mergeConfig(initialConfig),
   );
   const [timer, dispatch] = useReducer(
@@ -250,7 +290,7 @@ export default function TabataTimer({
   }, [config.workSeconds]);
 
   useEffect(() => {
-    if (isLocked) {
+    if (readOnly || isLocked) {
       return;
     }
 
@@ -261,7 +301,7 @@ export default function TabataTimer({
     if (!onHomeWithDefaults && pathname !== targetPath) {
       router.replace(targetPath, { scroll: false });
     }
-  }, [config, isLocked, pathname, router]);
+  }, [config, isLocked, pathname, readOnly, router]);
 
   const handleCopyLink = useCallback(async () => {
     const path = getTabataConfigPath(config);
@@ -346,11 +386,19 @@ export default function TabataTimer({
           ? "border-emerald-400/30 shadow-[0_0_60px_-12px_rgba(52,211,153,0.35)]"
           : "border-stone-700";
 
-  const totalSeconds =
-    config.sets * config.workSeconds +
-    (config.sets - 1) * config.restSeconds;
-
+  const totalSeconds = getTotalWorkoutSeconds(config);
   const workoutTitle = getWorkoutTitle(config);
+  const currentExerciseName = getExerciseName(config, timer.currentExercise);
+  const nextExerciseNumber =
+    timer.phase === "rest"
+      ? timer.currentExercise >= config.exercises
+        ? 1
+        : timer.currentExercise + 1
+      : 0;
+  const nextExerciseName =
+    nextExerciseNumber > 0
+      ? getExerciseName(config, nextExerciseNumber)
+      : "";
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-10 px-6 py-12">
@@ -359,9 +407,10 @@ export default function TabataTimer({
           {workoutTitle}
         </h1>
         <p className="mt-1 text-sm text-stone-500">
-          {config.sets} sets · {formatTime(totalSeconds)} total
+          {config.exercises} exercises · {config.sets}{" "}
+          {config.sets === 1 ? "set" : "sets"} · {formatTime(totalSeconds)} total
         </p>
-        {!isLocked && (
+        {!readOnly && !isLocked && (
           <button
             type="button"
             onClick={handleCopyLink}
@@ -387,27 +436,43 @@ export default function TabataTimer({
           {formatTime(timer.timeLeft)}
         </div>
 
+        {timer.phase === "work" && currentExerciseName ? (
+          <p className="mt-4 text-lg font-medium text-stone-200">
+            {currentExerciseName}
+          </p>
+        ) : null}
+
+        {timer.phase === "rest" && nextExerciseName ? (
+          <p className="mt-4 text-sm text-stone-400">
+            Next: {nextExerciseName}
+          </p>
+        ) : null}
+
         {timer.phase === "work" || timer.phase === "rest" ? (
-          <p className="mt-4 text-sm text-stone-500">
-            Set {timer.currentSet} of {config.sets}
+          <p
+            className={`text-sm text-stone-500 ${timer.phase === "work" && currentExerciseName ? "mt-2" : "mt-4"}`}
+          >
+            Exercise {timer.currentExercise} of {config.exercises} · Set{" "}
+            {timer.currentSet} of {config.sets}
           </p>
         ) : null}
 
         {timer.phase === "work" || timer.phase === "rest" || timer.phase === "complete" ? (
           <div className="mt-6 flex gap-1.5" aria-hidden="true">
-            {Array.from({ length: config.sets }, (_, i) => {
-              const setNumber = i + 1;
+            {Array.from({ length: config.exercises }, (_, i) => {
+              const exerciseNumber = i + 1;
               const isDone =
-                setNumber < timer.currentSet ||
-                (timer.phase === "complete" && setNumber <= config.sets);
+                exerciseNumber < timer.currentExercise ||
+                (timer.phase === "complete" &&
+                  exerciseNumber <= config.exercises);
               const isActive =
                 !isDone &&
-                setNumber === timer.currentSet &&
+                exerciseNumber === timer.currentExercise &&
                 (timer.phase === "work" || timer.phase === "rest");
 
               return (
                 <span
-                  key={setNumber}
+                  key={exerciseNumber}
                   className={`h-2 w-2 rounded-full transition-colors ${
                     isDone
                       ? "bg-stone-500"
@@ -424,6 +489,7 @@ export default function TabataTimer({
         ) : null}
       </section>
 
+      {!readOnly && (
       <section className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
           <label
@@ -473,6 +539,14 @@ export default function TabataTimer({
           disabled={isLocked}
         />
         <Stepper
+          label="Exercises"
+          value={config.exercises}
+          onChange={(exercises) => setConfig({ exercises })}
+          min={1}
+          max={50}
+          disabled={isLocked}
+        />
+        <Stepper
           label="Sets"
           value={config.sets}
           onChange={(sets) => setConfig({ sets })}
@@ -480,7 +554,36 @@ export default function TabataTimer({
           max={50}
           disabled={isLocked}
         />
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-stone-500">
+            Add a name for each exercise (optional)
+          </p>
+          <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
+            {config.exerciseNames.map((exerciseName, index) => (
+              <div key={index} className="flex items-center gap-3">
+                <span className="w-12 shrink-0 text-sm text-stone-500">
+                  {index + 1}
+                </span>
+                <input
+                  type="text"
+                  value={exerciseName}
+                  onChange={(event) => {
+                    const nextNames = [...config.exerciseNames];
+                    nextNames[index] = event.target.value;
+                    setConfig({ exerciseNames: nextNames });
+                  }}
+                  disabled={isLocked}
+                  placeholder="Add exercise name"
+                  maxLength={40}
+                  aria-label={`Exercise ${index + 1} name`}
+                  className="h-11 min-w-0 flex-1 rounded-xl border border-stone-700 bg-stone-900 px-3 text-sm text-stone-50 placeholder:text-stone-600 transition-colors focus:border-stone-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         {timer.phase === "idle" || timer.phase === "complete" ? (

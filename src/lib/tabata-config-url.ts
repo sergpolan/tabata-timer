@@ -3,7 +3,9 @@ export type TabataConfig = {
   prepareSeconds: number;
   workSeconds: number;
   restSeconds: number;
+  exercises: number;
   sets: number;
+  exerciseNames: string[];
 };
 
 export const DEFAULT_TABATA_CONFIG: TabataConfig = {
@@ -11,14 +13,18 @@ export const DEFAULT_TABATA_CONFIG: TabataConfig = {
   prepareSeconds: 10,
   workSeconds: 20,
   restSeconds: 10,
-  sets: 8,
+  exercises: 8,
+  sets: 1,
+  exerciseNames: [],
 };
 
 const LIMITS = {
   name: { max: 60 },
+  exerciseName: { max: 40 },
   prepareSeconds: { min: 0, max: 60 },
   workSeconds: { min: 5, max: 300 },
   restSeconds: { min: 0, max: 120 },
+  exercises: { min: 1, max: 50 },
   sets: { min: 1, max: 50 },
 } as const;
 
@@ -28,6 +34,8 @@ type EncodedTabataConfig = {
   s: number;
   p: number;
   n?: string;
+  e?: string[];
+  u?: number;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -57,7 +65,35 @@ function normalizeName(name: string) {
   return name.trim().slice(0, LIMITS.name.max);
 }
 
+function normalizeExerciseName(name: string) {
+  return name.trim().slice(0, LIMITS.exerciseName.max);
+}
+
+export function resizeExerciseNames(names: string[], exercises: number) {
+  const normalized = names.map(normalizeExerciseName);
+
+  if (normalized.length === exercises) {
+    return normalized;
+  }
+
+  if (normalized.length > exercises) {
+    return normalized.slice(0, exercises);
+  }
+
+  return [
+    ...normalized,
+    ...Array.from({ length: exercises - normalized.length }, () => ""),
+  ];
+}
+
 function normalizeConfig(config: TabataConfig): TabataConfig {
+  const exercises = clamp(
+    config.exercises,
+    LIMITS.exercises.min,
+    LIMITS.exercises.max,
+  );
+  const sets = clamp(config.sets, LIMITS.sets.min, LIMITS.sets.max);
+
   return {
     name: normalizeName(config.name),
     prepareSeconds: clamp(
@@ -75,16 +111,18 @@ function normalizeConfig(config: TabataConfig): TabataConfig {
       LIMITS.restSeconds.min,
       LIMITS.restSeconds.max,
     ),
-    sets: clamp(config.sets, LIMITS.sets.min, LIMITS.sets.max),
+    exercises,
+    sets,
+    exerciseNames: resizeExerciseNames(config.exerciseNames, exercises),
   };
 }
 
 function decodeLegacyConfig(decoded: string): TabataConfig | null {
-  const [workSeconds, restSeconds, sets, prepareSeconds] = decoded
+  const [workSeconds, restSeconds, exercises, prepareSeconds] = decoded
     .split(",")
     .map((value) => Number(value));
 
-  if ([workSeconds, restSeconds, sets, prepareSeconds].some(Number.isNaN)) {
+  if ([workSeconds, restSeconds, exercises, prepareSeconds].some(Number.isNaN)) {
     return null;
   }
 
@@ -92,9 +130,21 @@ function decodeLegacyConfig(decoded: string): TabataConfig | null {
     name: "",
     workSeconds,
     restSeconds,
-    sets,
+    exercises,
+    sets: 1,
     prepareSeconds,
+    exerciseNames: [],
   });
+}
+
+export function getTotalWorkoutSeconds(config: TabataConfig) {
+  const roundDuration =
+    config.exercises * config.workSeconds +
+    (config.exercises - 1) * config.restSeconds;
+
+  return (
+    config.sets * roundDuration + (config.sets - 1) * config.restSeconds
+  );
 }
 
 export function encodeTabataConfig(config: TabataConfig) {
@@ -102,12 +152,20 @@ export function encodeTabataConfig(config: TabataConfig) {
   const payload: EncodedTabataConfig = {
     w: normalized.workSeconds,
     r: normalized.restSeconds,
-    s: normalized.sets,
+    s: normalized.exercises,
     p: normalized.prepareSeconds,
   };
 
   if (normalized.name) {
     payload.n = normalized.name;
+  }
+
+  if (normalized.sets > 1) {
+    payload.u = normalized.sets;
+  }
+
+  if (normalized.exerciseNames.some((name) => name.length > 0)) {
+    payload.e = normalized.exerciseNames;
   }
 
   return toBase64Url(JSON.stringify(payload));
@@ -127,8 +185,10 @@ export function decodeTabataConfig(hash: string): TabataConfig | null {
         name: typeof data.n === "string" ? data.n : "",
         workSeconds: data.w,
         restSeconds: data.r,
-        sets: data.s,
+        exercises: data.s,
+        sets: typeof data.u === "number" ? data.u : 1,
         prepareSeconds: data.p,
+        exerciseNames: Array.isArray(data.e) ? data.e.map(String) : [],
       });
     }
 
@@ -145,13 +205,19 @@ export function getTabataConfigPath(config: TabataConfig) {
 export function isDefaultTabataConfig(config: TabataConfig) {
   return (
     !config.name.trim() &&
+    config.exerciseNames.every((name) => !name.trim()) &&
     config.prepareSeconds === DEFAULT_TABATA_CONFIG.prepareSeconds &&
     config.workSeconds === DEFAULT_TABATA_CONFIG.workSeconds &&
     config.restSeconds === DEFAULT_TABATA_CONFIG.restSeconds &&
+    config.exercises === DEFAULT_TABATA_CONFIG.exercises &&
     config.sets === DEFAULT_TABATA_CONFIG.sets
   );
 }
 
 export function getWorkoutTitle(config: TabataConfig) {
   return config.name.trim() || "Tabata Timer";
+}
+
+export function getExerciseName(config: TabataConfig, exerciseNumber: number) {
+  return config.exerciseNames[exerciseNumber - 1]?.trim() ?? "";
 }
