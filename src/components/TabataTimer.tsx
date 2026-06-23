@@ -1,6 +1,6 @@
 "use client";
 
-import { playPhaseSound, unlockSounds } from "@/lib/sounds";
+import { playCountdownTick, playPhaseSound, unlockSounds } from "@/lib/sounds";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 
 type Phase = "idle" | "prepare" | "work" | "rest" | "complete";
@@ -251,6 +251,10 @@ export default function TabataTimer() {
   useEffect(() => {
     const previousPhase = prevPhaseRef.current;
 
+    if (previousPhase === "prepare" && timer.phase === "work") {
+      playPhaseSound("prepareEnd");
+    }
+
     if (
       previousPhase === "work" &&
       (timer.phase === "rest" || timer.phase === "complete")
@@ -264,6 +268,14 @@ export default function TabataTimer() {
 
     prevPhaseRef.current = timer.phase;
   }, [timer.phase]);
+
+  useEffect(() => {
+    if (!timer.isRunning) {
+      return;
+    }
+
+    playCountdownTick(timer.phase, timer.timeLeft);
+  }, [timer.isRunning, timer.phase, timer.timeLeft]);
 
   const phaseColor =
     timer.phase === "prepare"
