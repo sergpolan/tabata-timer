@@ -1,5 +1,6 @@
 "use client";
 
+import { playPhaseSound, unlockSounds } from "@/lib/sounds";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 
 type Phase = "idle" | "prepare" | "work" | "rest" | "complete";
@@ -212,8 +213,14 @@ export default function TabataTimer() {
     createInitialState,
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevPhaseRef = useRef<Phase>("idle");
 
   const isLocked = timer.phase !== "idle" && timer.phase !== "complete";
+
+  const handleStart = useCallback(() => {
+    unlockSounds();
+    dispatch({ type: "start" });
+  }, []);
 
   const clearTimer = useCallback(() => {
     if (intervalRef.current) {
@@ -240,6 +247,23 @@ export default function TabataTimer() {
   }, [timer.isRunning, clearTimer]);
 
   useEffect(() => () => clearTimer(), [clearTimer]);
+
+  useEffect(() => {
+    const previousPhase = prevPhaseRef.current;
+
+    if (
+      previousPhase === "work" &&
+      (timer.phase === "rest" || timer.phase === "complete")
+    ) {
+      playPhaseSound("exerciseEnd");
+    }
+
+    if (previousPhase === "rest" && timer.phase === "work") {
+      playPhaseSound("restEnd");
+    }
+
+    prevPhaseRef.current = timer.phase;
+  }, [timer.phase]);
 
   const phaseColor =
     timer.phase === "prepare"
@@ -374,7 +398,7 @@ export default function TabataTimer() {
         {timer.phase === "idle" || timer.phase === "complete" ? (
           <button
             type="button"
-            onClick={() => dispatch({ type: "start" })}
+            onClick={handleStart}
             className="flex h-14 flex-1 items-center justify-center rounded-2xl bg-amber-400 text-base font-semibold text-stone-950 transition-colors hover:bg-amber-300"
           >
             {timer.phase === "complete" ? "Start again" : "Start"}
