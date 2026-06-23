@@ -4,6 +4,7 @@ import { playCountdownTick, playPhaseSound, unlockSounds } from "@/lib/sounds";
 import {
   DEFAULT_TABATA_CONFIG,
   getTabataConfigPath,
+  getWorkoutTitle,
   isDefaultTabataConfig,
   type TabataConfig,
 } from "@/lib/tabata-config-url";
@@ -276,6 +277,10 @@ export default function TabataTimer({
   }, [config]);
 
   useEffect(() => {
+    document.title = getWorkoutTitle(config);
+  }, [config]);
+
+  useEffect(() => {
     if (!timer.isRunning) {
       clearTimer();
       return;
@@ -345,11 +350,13 @@ export default function TabataTimer({
     config.sets * config.workSeconds +
     (config.sets - 1) * config.restSeconds;
 
+  const workoutTitle = getWorkoutTitle(config);
+
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-10 px-6 py-12">
       <header className="text-center">
         <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-          Tabata Timer
+          {workoutTitle}
         </h1>
         <p className="mt-1 text-sm text-stone-500">
           {config.sets} sets · {formatTime(totalSeconds)} total
@@ -418,6 +425,24 @@ export default function TabataTimer({
       </section>
 
       <section className="flex flex-col gap-5">
+        <div className="flex flex-col gap-2">
+          <label
+            htmlFor="workout-name"
+            className="text-sm font-medium text-stone-400"
+          >
+            Workout name
+          </label>
+          <input
+            id="workout-name"
+            type="text"
+            value={config.name}
+            onChange={(event) => setConfig({ name: event.target.value })}
+            disabled={isLocked}
+            placeholder="Morning HIIT"
+            maxLength={60}
+            className="h-12 rounded-xl border border-stone-700 bg-stone-900 px-4 text-base text-stone-50 placeholder:text-stone-600 transition-colors focus:border-stone-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+          />
+        </div>
         <Stepper
           label="Prepare"
           value={config.prepareSeconds}
