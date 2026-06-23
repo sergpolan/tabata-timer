@@ -222,6 +222,13 @@ export default function TabataTimer() {
     dispatch({ type: "start" });
   }, []);
 
+  const handleTogglePause = useCallback(() => {
+    if (!timer.isRunning) {
+      unlockSounds();
+    }
+    dispatch({ type: timer.isRunning ? "pause" : "resume" });
+  }, [timer.isRunning]);
+
   const clearTimer = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -418,9 +425,7 @@ export default function TabataTimer() {
         ) : (
           <button
             type="button"
-            onClick={() =>
-              dispatch({ type: timer.isRunning ? "pause" : "resume" })
-            }
+            onClick={handleTogglePause}
             className="flex h-14 flex-1 items-center justify-center rounded-2xl bg-stone-100 text-base font-semibold text-stone-950 transition-colors hover:bg-white"
           >
             {timer.isRunning ? "Pause" : "Resume"}
