@@ -11,7 +11,7 @@ import {
   resizeExerciseNames,
   type TabataConfig,
 } from "@/lib/tabata-config-url";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 type Phase = "idle" | "prepare" | "work" | "rest" | "complete";
@@ -238,7 +238,6 @@ export default function TabataTimer({
   initialConfig?: Partial<Config>;
   readOnly?: boolean;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const [config, setConfig] = useReducer(
@@ -298,10 +297,17 @@ export default function TabataTimer({
     const onHomeWithDefaults =
       pathname === "/" && isDefaultTabataConfig(config);
 
-    if (!onHomeWithDefaults && pathname !== targetPath) {
-      router.replace(targetPath, { scroll: false });
+    if (onHomeWithDefaults) {
+      if (window.location.pathname !== "/") {
+        window.history.replaceState(null, "", "/");
+      }
+      return;
     }
-  }, [config, isLocked, pathname, readOnly, router]);
+
+    if (window.location.pathname !== targetPath) {
+      window.history.replaceState(null, "", targetPath);
+    }
+  }, [config, isLocked, pathname, readOnly]);
 
   const handleCopyLink = useCallback(async () => {
     const path = getTabataConfigPath(config);

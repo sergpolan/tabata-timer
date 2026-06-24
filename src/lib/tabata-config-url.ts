@@ -69,8 +69,12 @@ function normalizeExerciseName(name: string) {
   return name.trim().slice(0, LIMITS.exerciseName.max);
 }
 
+function sanitizeExerciseName(name: string) {
+  return name.slice(0, LIMITS.exerciseName.max);
+}
+
 export function resizeExerciseNames(names: string[], exercises: number) {
-  const normalized = names.map(normalizeExerciseName);
+  const normalized = names.map(sanitizeExerciseName);
 
   if (normalized.length === exercises) {
     return normalized;
