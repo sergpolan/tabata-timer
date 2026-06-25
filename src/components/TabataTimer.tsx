@@ -166,32 +166,25 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-const MID_RANGE_MARKS = [31, 36, 41, 46, 51, 56] as const;
-
 function adjustIntervalUp(value: number) {
   if (value < 30) {
     return value + 1;
-  }
-
-  if (value === 30) {
-    return 31;
   }
 
   if (value >= 61) {
     return value + 10;
   }
 
-  if (value === 56) {
-    return 61;
+  if (value === 60) {
+    return 70;
   }
 
-  for (const mark of MID_RANGE_MARKS) {
-    if (mark > value) {
-      return mark;
-    }
+  if (value % 5 !== 0) {
+    return Math.ceil(value / 5) * 5;
   }
 
-  return 61;
+  const next = value + 5;
+  return next > 60 ? 60 : next;
 }
 
 function adjustIntervalDown(value: number) {
@@ -204,21 +197,15 @@ function adjustIntervalDown(value: number) {
   }
 
   if (value === 61) {
-    return 56;
+    return 60;
   }
 
-  if (value === 31) {
-    return 30;
+  if (value % 5 !== 0) {
+    return Math.floor(value / 5) * 5;
   }
 
-  for (let index = MID_RANGE_MARKS.length - 1; index >= 0; index--) {
-    const mark = MID_RANGE_MARKS[index];
-    if (mark < value) {
-      return mark;
-    }
-  }
-
-  return 30;
+  const previous = value - 5;
+  return previous < 30 ? 30 : previous;
 }
 
 function adjustInterval(value: number, direction: "up" | "down") {
