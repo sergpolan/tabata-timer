@@ -22,8 +22,8 @@ const LIMITS = {
   name: { max: 60 },
   exerciseName: { max: 40 },
   prepareSeconds: { min: 0, max: 60 },
-  workSeconds: { min: 5, max: 300 },
-  restSeconds: { min: 0, max: 120 },
+  workSeconds: { min: 5, max: 600 },
+  restSeconds: { min: 0, max: 600 },
   exercises: { min: 1, max: 50 },
   sets: { min: 1, max: 50 },
 } as const;

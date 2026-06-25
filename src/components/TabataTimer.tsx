@@ -166,6 +166,10 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function getIntervalStep(value: number) {
+  return value > 60 ? 10 : 1;
+}
+
 type StepperProps = {
   label: string;
   value: number;
@@ -173,6 +177,7 @@ type StepperProps = {
   min: number;
   max: number;
   step?: number;
+  getStep?: (value: number) => number;
   suffix?: string;
   disabled?: boolean;
 };
@@ -184,9 +189,12 @@ function Stepper({
   min,
   max,
   step = 1,
+  getStep,
   suffix,
   disabled,
 }: StepperProps) {
+  const stepSize = getStep ? getStep(value) : step;
+
   return (
     <div className="flex items-center justify-between gap-4">
       <span className="w-20 shrink-0 text-sm font-medium text-stone-400">
@@ -197,7 +205,7 @@ function Stepper({
           type="button"
           aria-label={`Decrease ${label}`}
           disabled={disabled || value <= min}
-          onClick={() => onChange(clamp(value - step, min, max))}
+          onClick={() => onChange(clamp(value - stepSize, min, max))}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-stone-700 bg-stone-900 text-lg text-stone-200 transition-colors hover:border-stone-500 hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
         >
           −
@@ -214,7 +222,7 @@ function Stepper({
           type="button"
           aria-label={`Increase ${label}`}
           disabled={disabled || value >= max}
-          onClick={() => onChange(clamp(value + step, min, max))}
+          onClick={() => onChange(clamp(value + stepSize, min, max))}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-stone-700 bg-stone-900 text-lg text-stone-200 transition-colors hover:border-stone-500 hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
         >
           +
@@ -540,7 +548,8 @@ export default function TabataTimer({
           value={config.workSeconds}
           onChange={(workSeconds) => setConfig({ workSeconds })}
           min={5}
-          max={300}
+          max={600}
+          getStep={getIntervalStep}
           suffix="sec"
           disabled={isLocked}
         />
@@ -549,7 +558,8 @@ export default function TabataTimer({
           value={config.restSeconds}
           onChange={(restSeconds) => setConfig({ restSeconds })}
           min={0}
-          max={120}
+          max={600}
+          getStep={getIntervalStep}
           suffix="sec"
           disabled={isLocked}
         />
