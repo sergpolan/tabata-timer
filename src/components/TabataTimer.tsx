@@ -167,7 +167,15 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function getIntervalStep(value: number) {
-  return value > 60 ? 10 : 1;
+  if (value > 60) {
+    return 10;
+  }
+
+  if (value > 30) {
+    return 5;
+  }
+
+  return 1;
 }
 
 type StepperProps = {
