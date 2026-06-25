@@ -40,7 +40,7 @@ export default async function TabataConfigPage({ params }: TabataConfigPageProps
 
   return (
     <main className="flex min-h-full flex-1 items-center justify-center">
-      <TabataTimer initialConfig={config} />
+      <TabataTimer initialConfig={config} readOnly />
     </main>
   );
 }

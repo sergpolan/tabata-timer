@@ -3,6 +3,7 @@
 import { playCountdownTick, playPhaseSound, unlockSounds } from "@/lib/sounds";
 import {
   DEFAULT_TABATA_CONFIG,
+  encodeTabataConfig,
   getExerciseName,
   getTabataConfigPath,
   getTotalWorkoutSeconds,
@@ -267,8 +268,18 @@ export default function TabataTimer({
 
   const handleStart = useCallback(() => {
     unlockSounds();
+
+    if (!isDefaultTabataConfig(config)) {
+      const hash = encodeTabataConfig(config);
+      void fetch("/api/workouts/play", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hash }),
+      });
+    }
+
     dispatch({ type: "start" });
-  }, []);
+  }, [config]);
 
   const handleTogglePause = useCallback(() => {
     if (!timer.isRunning) {

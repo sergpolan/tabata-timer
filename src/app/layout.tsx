@@ -1,3 +1,4 @@
+import SiteNav from "@/components/SiteNav";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
@@ -30,6 +31,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-stone-950 text-stone-50">
+        <SiteNav />
         {children}
         <Analytics />
         <SpeedInsights />
