@@ -166,16 +166,63 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function getIntervalStep(value: number) {
-  if (value > 60) {
-    return 10;
+const MID_RANGE_MARKS = [31, 36, 41, 46, 51, 56] as const;
+
+function adjustIntervalUp(value: number) {
+  if (value < 30) {
+    return value + 1;
   }
 
-  if (value > 30) {
-    return 5;
+  if (value === 30) {
+    return 31;
   }
 
-  return 1;
+  if (value >= 61) {
+    return value + 10;
+  }
+
+  if (value === 56) {
+    return 61;
+  }
+
+  for (const mark of MID_RANGE_MARKS) {
+    if (mark > value) {
+      return mark;
+    }
+  }
+
+  return 61;
+}
+
+function adjustIntervalDown(value: number) {
+  if (value <= 30) {
+    return value - 1;
+  }
+
+  if (value > 61) {
+    return value - 10;
+  }
+
+  if (value === 61) {
+    return 56;
+  }
+
+  if (value === 31) {
+    return 30;
+  }
+
+  for (let index = MID_RANGE_MARKS.length - 1; index >= 0; index--) {
+    const mark = MID_RANGE_MARKS[index];
+    if (mark < value) {
+      return mark;
+    }
+  }
+
+  return 30;
+}
+
+function adjustInterval(value: number, direction: "up" | "down") {
+  return direction === "up" ? adjustIntervalUp(value) : adjustIntervalDown(value);
 }
 
 type StepperProps = {
@@ -185,7 +232,7 @@ type StepperProps = {
   min: number;
   max: number;
   step?: number;
-  getStep?: (value: number) => number;
+  adjustValue?: (value: number, direction: "up" | "down") => number;
   suffix?: string;
   disabled?: boolean;
 };
@@ -197,11 +244,23 @@ function Stepper({
   min,
   max,
   step = 1,
-  getStep,
+  adjustValue,
   suffix,
   disabled,
 }: StepperProps) {
-  const stepSize = getStep ? getStep(value) : step;
+  const decrease = () => {
+    const next = adjustValue
+      ? adjustValue(value, "down")
+      : value - step;
+    onChange(clamp(next, min, max));
+  };
+
+  const increase = () => {
+    const next = adjustValue
+      ? adjustValue(value, "up")
+      : value + step;
+    onChange(clamp(next, min, max));
+  };
 
   return (
     <div className="flex items-center justify-between gap-4">
@@ -213,7 +272,7 @@ function Stepper({
           type="button"
           aria-label={`Decrease ${label}`}
           disabled={disabled || value <= min}
-          onClick={() => onChange(clamp(value - stepSize, min, max))}
+          onClick={decrease}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-stone-700 bg-stone-900 text-lg text-stone-200 transition-colors hover:border-stone-500 hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
         >
           −
@@ -230,7 +289,7 @@ function Stepper({
           type="button"
           aria-label={`Increase ${label}`}
           disabled={disabled || value >= max}
-          onClick={() => onChange(clamp(value + stepSize, min, max))}
+          onClick={increase}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-stone-700 bg-stone-900 text-lg text-stone-200 transition-colors hover:border-stone-500 hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
         >
           +
@@ -557,7 +616,7 @@ export default function TabataTimer({
           onChange={(workSeconds) => setConfig({ workSeconds })}
           min={5}
           max={600}
-          getStep={getIntervalStep}
+          adjustValue={adjustInterval}
           suffix="sec"
           disabled={isLocked}
         />
@@ -567,7 +626,7 @@ export default function TabataTimer({
           onChange={(restSeconds) => setConfig({ restSeconds })}
           min={0}
           max={600}
-          getStep={getIntervalStep}
+          adjustValue={adjustInterval}
           suffix="sec"
           disabled={isLocked}
         />
