@@ -541,7 +541,6 @@ export default function TabataTimer({
           onChange={(workSeconds) => setConfig({ workSeconds })}
           min={5}
           max={300}
-          step={5}
           suffix="sec"
           disabled={isLocked}
         />
@@ -551,7 +550,6 @@ export default function TabataTimer({
           onChange={(restSeconds) => setConfig({ restSeconds })}
           min={0}
           max={120}
-          step={5}
           suffix="sec"
           disabled={isLocked}
         />
