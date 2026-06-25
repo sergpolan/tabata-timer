@@ -48,12 +48,16 @@ function mergeConfig(initialConfig?: Partial<Config>): Config {
   };
 }
 
+function getIdleTimeLeft(config: Config) {
+  return config.prepareSeconds > 0 ? config.prepareSeconds : config.workSeconds;
+}
+
 function createInitialState(config: Config): TimerState {
   return {
     phase: "idle",
     currentSet: 1,
     currentExercise: 1,
-    timeLeft: config.workSeconds,
+    timeLeft: getIdleTimeLeft(config),
     isRunning: false,
   };
 }
@@ -91,7 +95,7 @@ function timerReducer(
       return createInitialState(config);
     case "sync_config":
       return state.phase === "idle"
-        ? { ...state, timeLeft: config.workSeconds }
+        ? { ...state, timeLeft: getIdleTimeLeft(config) }
         : state;
     case "tick": {
       if (
@@ -359,7 +363,7 @@ export default function TabataTimer({
 
   useEffect(() => {
     dispatch({ type: "sync_config" });
-  }, [config.workSeconds]);
+  }, [config.workSeconds, config.prepareSeconds]);
 
   useEffect(() => {
     if (readOnly || isLocked) {
